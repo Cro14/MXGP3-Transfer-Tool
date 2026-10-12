@@ -27,13 +27,13 @@ jobs:
         run: python -m py_compile mxgp3_transfer_tool.py
 
       - name: Build EXE
-        run: pyinstaller --noconfirm --clean --onefile --windowed --name MXGP3_Transfer_Tool_v0.2 mxgp3_transfer_tool.py
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name MXGP3_Transfer_Tool_v0.3 mxgp3_transfer_tool.py
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MXGP3_Transfer_Tool_v0.2
-          path: dist/MXGP3_Transfer_Tool_v0.2.exe
+          name: MXGP3_Transfer_Tool_v0.3
+          path: dist/MXGP3_Transfer_Tool_v0.3.exe
           if-no-files-found: error
 
       - name: Publish direct EXE download
@@ -41,10 +41,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v0.2-pak"
+          $tag = "v0.3-auto-replace"
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag "dist/MXGP3_Transfer_Tool_v0.2.exe" --clobber
+            gh release upload $tag "dist/MXGP3_Transfer_Tool_v0.3.exe" --clobber
           } else {
-            gh release create $tag "dist/MXGP3_Transfer_Tool_v0.2.exe" --title "MXGP3 Transfer Tool v0.2 PAK Test" --notes "Test build that edits the MXGP3 SQLite database, creates an override PAK at the original internal database path, and installs it into the game's Content/Paks folder. Requires UnrealPak.exe from the user's existing UnrealPak tools." --target "${{ github.sha }}"
+            gh release create $tag "dist/MXGP3_Transfer_Tool_v0.3.exe" --title "MXGP3 Transfer Tool v0.3 Auto Replace" --notes "One-click test build: edits the rider team assignment, rebuilds a high-priority pakchunk99 override, automatically replaces the previous Transfer Tool PAK, verifies the installed PAK, and rolls the DB back if installation fails. Requires UnrealPak.exe from the user's existing tools." --target "${{ github.sha }}"
           }
