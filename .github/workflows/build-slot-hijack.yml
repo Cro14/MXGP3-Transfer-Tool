@@ -1,0 +1,58 @@
+name: Build Slot Hijack EXE
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "mxgp3_slot_hijack_v07.py"
+      - ".github/workflows/build-slot-hijack.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Syntax check
+        run: python -m py_compile mxgp3_slot_hijack_v07.py
+
+      - name: Build EXE
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed `
+            --name MXGP3_Slot_Hijack_Test_v0.7 `
+            mxgp3_slot_hijack_v07.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MXGP3_Slot_Hijack_Test_v0.7
+          path: dist/MXGP3_Slot_Hijack_Test_v0.7.exe
+          if-no-files-found: error
+
+      - name: Publish direct EXE download
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v0.7-slot-hijack"
+          $exe = "dist/MXGP3_Slot_Hijack_Test_v0.7.exe"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $exe --clobber
+          } else {
+            gh release create $tag $exe --title "MXGP3 Slot Hijack Test v0.7" --notes "Experimental old-MXGP-style slot replacement test. Instead of changing Herlings' team/bike, it copies identity and roster data onto an existing destination slot while deliberately keeping that slot's native team, vehicle and customization. Default diagnostic test is Herlings identity onto Anstie's Rockstar Husqvarna slot. The visible surname may remain the destination rider because the slot key is intentionally preserved." --target "${{ github.sha }}"
+          }
