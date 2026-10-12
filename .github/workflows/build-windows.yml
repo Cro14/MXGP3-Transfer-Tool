@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -26,9 +26,22 @@ jobs:
       - name: Build EXE
         run: pyinstaller --noconfirm --clean --onefile --windowed --name MXGP3_Transfer_Tool_v0.1 mxgp3_transfer_tool.py
 
-      - name: Upload EXE
+      - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
           name: MXGP3_Transfer_Tool_v0.1
           path: dist/MXGP3_Transfer_Tool_v0.1.exe
           if-no-files-found: error
+
+      - name: Publish direct EXE download
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v0.1-autodetect"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag "dist/MXGP3_Transfer_Tool_v0.1.exe" --clobber
+          } else {
+            gh release create $tag "dist/MXGP3_Transfer_Tool_v0.1.exe" --title "MXGP3 Transfer Tool v0.1 Auto Detect" --notes "Windows test build with automatic MXGP3 and extracted DB.sqlite3 detection." --target "${{ github.sha }}"
+          }
