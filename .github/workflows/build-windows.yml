@@ -23,17 +23,37 @@ jobs:
       - name: Install PyInstaller
         run: python -m pip install --upgrade pip pyinstaller
 
+      - name: Download repak for Windows
+        shell: pwsh
+        run: |
+          $url = "https://github.com/trumank/repak/releases/download/v0.2.3/repak_cli-x86_64-pc-windows-msvc.zip"
+          Invoke-WebRequest -Uri $url -OutFile repak.zip
+          Expand-Archive -Path repak.zip -DestinationPath repak_dist -Force
+          $repak = Get-ChildItem -Path repak_dist -Recurse -Filter "repak.exe" | Select-Object -First 1
+          if (-not $repak) { throw "repak.exe not found in downloaded archive" }
+          Copy-Item $repak.FullName .\repak.exe -Force
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/trumank/repak/master/LICENSE-MIT" -OutFile repak-LICENSE-MIT.txt
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/trumank/repak/master/LICENSE-APACHE" -OutFile repak-LICENSE-APACHE.txt
+          .\repak.exe --version
+
       - name: Syntax check
         run: python -m py_compile mxgp3_transfer_tool.py
 
-      - name: Build EXE
-        run: pyinstaller --noconfirm --clean --onefile --windowed --name MXGP3_Transfer_Tool_v0.3 mxgp3_transfer_tool.py
+      - name: Build self-contained EXE
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed `
+            --name MXGP3_Transfer_Tool_v0.4 `
+            --add-binary "repak.exe;." `
+            --add-data "repak-LICENSE-MIT.txt;licenses" `
+            --add-data "repak-LICENSE-APACHE.txt;licenses" `
+            mxgp3_transfer_tool.py
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MXGP3_Transfer_Tool_v0.3
-          path: dist/MXGP3_Transfer_Tool_v0.3.exe
+          name: MXGP3_Transfer_Tool_v0.4
+          path: dist/MXGP3_Transfer_Tool_v0.4.exe
           if-no-files-found: error
 
       - name: Publish direct EXE download
@@ -41,10 +61,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v0.3-auto-replace"
+          $tag = "v0.4-self-contained"
+          $exe = "dist/MXGP3_Transfer_Tool_v0.4.exe"
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag "dist/MXGP3_Transfer_Tool_v0.3.exe" --clobber
+            gh release upload $tag $exe --clobber
           } else {
-            gh release create $tag "dist/MXGP3_Transfer_Tool_v0.3.exe" --title "MXGP3 Transfer Tool v0.3 Auto Replace" --notes "One-click test build: edits the rider team assignment, rebuilds a high-priority pakchunk99 override, automatically replaces the previous Transfer Tool PAK, verifies the installed PAK, and rolls the DB back if installation fails. Requires UnrealPak.exe from the user's existing tools." --target "${{ github.sha }}"
+            gh release create $tag $exe --title "MXGP3 Transfer Tool v0.4 Self-Contained" --notes "Fixes the UnrealPak DerivedDataCache crash by replacing UnrealPak with bundled repak. The tool detects MXGP3, reads the original PAK version and mount point, finds and extracts DB.sqlite3 directly from the game, applies rider transfers, builds a matching override PAK, verifies it and atomically installs it. No separate UnrealPak.exe or pre-extracted DB is required." --target "${{ github.sha }}"
           }
