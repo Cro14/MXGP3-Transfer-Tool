@@ -12,18 +12,21 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 APP_NAME = "MXGP3 Transfer Tool"
-VERSION = "0.2"
+VERSION = "0.3"
 STEAM_APP_ID = "561600"
 REQUIRED_TABLES = {"Pilots", "Teams", "PilotsInRosters"}
-MOD_PAK_NAME = "pakchunk0-WindowsNoEditor_MXGP3TransferTool_P.pak"
-INTERNAL_DB_PATH = "../../../mxgp3/Content/assets/data/db/NoCook/DB.sqlite3"
+MOD_PAK_NAME = "pakchunk99-MXGP3TransferTool_P.pak"
+OLD_MOD_PAK_NAMES = [
+    "pakchunk0-WindowsNoEditor_MXGP3TransferTool_P.pak",
+    "pakchunk99-MXGP3TransferTool_P.pak",
+]
 
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} v{VERSION}")
-        self.geometry("900x690")
+        self.geometry("900x700")
         self.minsize(820, 620)
         self.conn = None
         self.db_path = None
@@ -37,7 +40,7 @@ class App(tk.Tk):
 
     def _build_ui(self):
         ttk.Label(self, text="MXGP3 TRANSFER TOOL", font=("Segoe UI", 20, "bold")).pack(pady=(16, 2))
-        ttk.Label(self, text="v0.2 PAK TEST BUILD — Cro14 / Jeffrey Helings").pack(pady=(0, 12))
+        ttk.Label(self, text="v0.3 AUTO REPLACE TEST BUILD — Cro14 / Jeffrey Herlings").pack(pady=(0, 12))
 
         detect = ttk.LabelFrame(self, text="Automatic detection")
         detect.pack(fill="x", padx=18, pady=7)
@@ -53,9 +56,9 @@ class App(tk.Tk):
         self.unrealpak_label.grid(row=2, column=1, sticky="ew", padx=6, pady=5)
         ttk.Button(detect, text="Auto Detect", command=lambda: self.auto_detect(True)).grid(row=0, column=2, rowspan=3, padx=6, pady=8)
         ttk.Button(detect, text="Browse DB", command=self.open_db).grid(row=0, column=3, rowspan=3, padx=6, pady=8)
-        ttk.Button(detect, text="Browse UnrealPak", command=self.browse_unrealpak).grid(row=0, column=4, rowspan=3, padx=(6,10), pady=8)
+        ttk.Button(detect, text="Browse UnrealPak", command=self.browse_unrealpak).grid(row=0, column=4, rowspan=3, padx=(6, 10), pady=8)
 
-        tf = ttk.LabelFrame(self, text="Rider transfer")
+        tf = ttk.LabelFrame(self, text="Rider transfer — automatic game install")
         tf.pack(fill="x", padx=18, pady=7)
         tf.columnconfigure(1, weight=1)
         ttk.Label(tf, text="Class:").grid(row=0, column=0, sticky="w", padx=10, pady=7)
@@ -72,13 +75,17 @@ class App(tk.Tk):
         ttk.Label(tf, text="New team:").grid(row=3, column=0, sticky="w", padx=10, pady=7)
         self.team_box = ttk.Combobox(tf, state="readonly")
         self.team_box.grid(row=3, column=1, sticky="ew", padx=10, pady=7)
-        ttk.Button(tf, text="TRANSFER + APPLY TO GAME", command=self.transfer_and_apply).grid(row=4, column=0, columnspan=2, pady=14, ipadx=32, ipady=6)
+        ttk.Button(tf, text="TRANSFER RIDER — AUTO INSTALL", command=self.transfer_and_apply).grid(
+            row=4, column=0, columnspan=2, pady=14, ipadx=34, ipady=7
+        )
 
-        af = ttk.LabelFrame(self, text="Game patch")
+        af = ttk.LabelFrame(self, text="Automatic replacement")
         af.pack(fill="x", padx=18, pady=7)
-        ttk.Button(af, text="Apply Current DB to Game", command=self.apply_current_db).pack(side="left", padx=10, pady=9)
-        ttk.Button(af, text="Remove Transfer PAK", command=self.remove_mod_pak).pack(side="left", padx=10, pady=9)
-        ttk.Label(af, text=f"Creates {MOD_PAK_NAME}").pack(side="left", padx=8)
+        ttk.Label(
+            af,
+            text="Each transfer rebuilds the DB override, replaces the previous tool PAK atomically, then verifies it."
+        ).pack(side="left", padx=10, pady=9)
+        ttk.Button(af, text="Remove Tool PAK", command=self.remove_mod_pak).pack(side="right", padx=10, pady=9)
 
         sf = ttk.LabelFrame(self, text="Safety")
         sf.pack(fill="x", padx=18, pady=7)
@@ -86,10 +93,10 @@ class App(tk.Tk):
         ttk.Button(sf, text="Restore DB Backup", command=self.restore_backup).pack(side="left", padx=10, pady=9)
 
         lf = ttk.LabelFrame(self, text="Log")
-        lf.pack(fill="both", expand=True, padx=18, pady=(7,18))
-        self.logbox = tk.Text(lf, height=11, state="disabled", font=("Consolas", 9))
+        lf.pack(fill="both", expand=True, padx=18, pady=(7, 18))
+        self.logbox = tk.Text(lf, height=12, state="disabled", font=("Consolas", 9))
         self.logbox.pack(fill="both", expand=True, padx=8, pady=8)
-        self.log("v0.2: transfers are now packed back into the game as an override PAK.")
+        self.log("v0.3: one click now edits the DB and automatically replaces the installed override PAK.")
 
     def log(self, text):
         self.logbox.config(state="normal")
@@ -196,12 +203,17 @@ class App(tk.Tk):
                         pass
             except Exception:
                 pass
-        roots += [Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Steam", Path(r"C:\Steam")]
+        roots += [
+            Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Steam",
+            Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Steam",
+            Path(r"C:\Steam"),
+        ]
         out, seen = [], set()
         for p in roots:
             k = str(p).lower()
             if k not in seen and p.exists():
-                seen.add(k); out.append(p)
+                seen.add(k)
+                out.append(p)
         return out
 
     def get_steam_libraries(self, steam_root):
@@ -218,7 +230,8 @@ class App(tk.Tk):
         for p in libs:
             k = str(p).lower()
             if k not in seen and p.exists():
-                seen.add(k); out.append(p)
+                seen.add(k)
+                out.append(p)
         return out
 
     def looks_like_game_dir(self, p):
@@ -226,42 +239,73 @@ class App(tk.Tk):
 
     def find_paks_dir(self, game=None):
         game = Path(game or self.game_path or "")
-        candidates = [game / "mxgp3" / "Content" / "Paks", game / "MXGP3" / "Content" / "Paks", game / "Content" / "Paks"]
+        candidates = [
+            game / "mxgp3" / "Content" / "Paks",
+            game / "MXGP3" / "Content" / "Paks",
+            game / "Content" / "Paks",
+        ]
         return next((p for p in candidates if p.exists()), None)
+
+    def internal_db_path(self, paks_dir):
+        try:
+            project_name = paks_dir.parent.parent.name
+            if not project_name or project_name.lower() == Path(self.game_path or "").name.lower():
+                if paks_dir.parent.name.lower() == "content":
+                    project_name = paks_dir.parent.parent.name or "mxgp3"
+            if project_name.lower() == "content":
+                project_name = "mxgp3"
+        except Exception:
+            project_name = "mxgp3"
+        if not project_name:
+            project_name = "mxgp3"
+        return f"../../../{project_name}/Content/assets/data/db/NoCook/DB.sqlite3"
 
     def detect_database_path(self, game=None):
         candidates = []
         last = self.config.get("last_db")
-        if last: candidates.append(Path(last))
+        if last:
+            candidates.append(Path(last))
         app_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
         roots = [app_dir, Path.cwd()]
-        if game: roots.insert(0, Path(game))
+        if game:
+            roots.insert(0, Path(game))
         rels = [
-            Path("DB.sqlite3"), Path("NoCook/DB.sqlite3"), Path("Content/assets/data/db/NoCook/DB.sqlite3"),
-            Path("mxgp3/Content/assets/data/db/NoCook/DB.sqlite3"), Path("Extracted/Content/assets/data/db/NoCook/DB.sqlite3"),
-            Path("Extracted/mxgp3/Content/assets/data/db/NoCook/DB.sqlite3")]
+            Path("DB.sqlite3"),
+            Path("NoCook/DB.sqlite3"),
+            Path("Content/assets/data/db/NoCook/DB.sqlite3"),
+            Path("mxgp3/Content/assets/data/db/NoCook/DB.sqlite3"),
+            Path("Extracted/Content/assets/data/db/NoCook/DB.sqlite3"),
+            Path("Extracted/mxgp3/Content/assets/data/db/NoCook/DB.sqlite3"),
+        ]
         for root in roots:
-            for rel in rels: candidates.append(root / rel)
+            for rel in rels:
+                candidates.append(root / rel)
         for p in candidates:
-            if p.exists() and self.is_compatible_db(p): return p
+            if p.exists() and self.is_compatible_db(p):
+                return p
         for root in roots:
             found = self.scan_for_database(root, 7)
-            if found: return found
+            if found:
+                return found
         return None
 
     def scan_for_database(self, root, max_depth=7):
         try:
             root = Path(root)
-            if not root.exists(): return None
+            if not root.exists():
+                return None
             base_depth = len(root.parts)
             skip = {".git", "Engine", "Binaries", "Saved", "Intermediate", "__pycache__"}
             for current, dirs, files in os.walk(root):
                 p = Path(current)
-                if len(p.parts) - base_depth >= max_depth: dirs[:] = []
-                else: dirs[:] = [d for d in dirs if d not in skip]
+                if len(p.parts) - base_depth >= max_depth:
+                    dirs[:] = []
+                else:
+                    dirs[:] = [d for d in dirs if d not in skip]
                 if "DB.sqlite3" in files:
                     candidate = p / "DB.sqlite3"
-                    if self.is_compatible_db(candidate): return candidate
+                    if self.is_compatible_db(candidate):
+                        return candidate
         except Exception:
             pass
         return None
@@ -277,44 +321,62 @@ class App(tk.Tk):
 
     def detect_unrealpak(self):
         last = self.config.get("unrealpak")
-        if last and Path(last).is_file(): return Path(last)
+        if last and Path(last).is_file():
+            return Path(last)
         app_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
-        home = Path.home()
-        direct = [app_dir / "UnrealPak.exe", Path.cwd() / "UnrealPak.exe"]
+        direct = [
+            app_dir / "UnrealPak.exe",
+            app_dir / "UnrealPak" / "UnrealPak.exe",
+            Path.cwd() / "UnrealPak.exe",
+        ]
         for p in direct:
-            if p.exists(): return p
-        roots = [home / "Downloads", home / "Desktop", home / "Documents"]
+            if p.exists():
+                return p
+        roots = [Path.home() / "Downloads", Path.home() / "Desktop", Path.home() / "Documents"]
         for root in roots:
-            if not root.exists(): continue
+            if not root.exists():
+                continue
             try:
                 for current, dirs, files in os.walk(root):
                     depth = len(Path(current).parts) - len(root.parts)
-                    if depth >= 5: dirs[:] = []
-                    if "UnrealPak.exe" in files: return Path(current) / "UnrealPak.exe"
+                    if depth >= 6:
+                        dirs[:] = []
+                    if "UnrealPak.exe" in files:
+                        return Path(current) / "UnrealPak.exe"
             except Exception:
                 pass
         return None
 
     def browse_unrealpak(self):
-        p = filedialog.askopenfilename(title="Select UnrealPak.exe", filetypes=[("UnrealPak", "UnrealPak.exe"), ("Executable", "*.exe")])
+        p = filedialog.askopenfilename(
+            title="Select UnrealPak.exe",
+            filetypes=[("UnrealPak", "UnrealPak.exe"), ("Executable", "*.exe")],
+        )
         if p:
             self.unrealpak_path = p
             self.unrealpak_label.config(text=p)
             self.save_config()
 
     def open_db(self):
-        p = filedialog.askopenfilename(title="Select MXGP3 DB.sqlite3", filetypes=[("SQLite database", "*.sqlite3"), ("All files", "*.*")])
+        p = filedialog.askopenfilename(
+            title="Select MXGP3 DB.sqlite3",
+            filetypes=[("SQLite database", "*.sqlite3"), ("All files", "*.*")],
+        )
         if p:
-            try: self.load_database(p)
-            except Exception as e: messagebox.showerror(APP_NAME, str(e))
+            try:
+                self.load_database(p)
+            except Exception as e:
+                messagebox.showerror(APP_NAME, str(e))
 
     def load_database(self, path, automatic=False):
         c = sqlite3.connect(path)
         tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         missing = REQUIRED_TABLES - tables
         if missing:
-            c.close(); raise RuntimeError("Not a compatible MXGP3 DB. Missing: " + ", ".join(sorted(missing)))
-        if self.conn: self.conn.close()
+            c.close()
+            raise RuntimeError("Not a compatible MXGP3 DB. Missing: " + ", ".join(sorted(missing)))
+        if self.conn:
+            self.conn.close()
         self.conn = c
         self.db_path = path
         self.db_label.config(text=path)
@@ -324,35 +386,48 @@ class App(tk.Tk):
         self.log(("Auto-loaded" if automatic else "Loaded") + f" DB: {path}")
 
     def load_riders(self):
-        if not self.conn: return
+        if not self.conn:
+            return
         cat = self.class_box.get()
-        rows = self.conn.execute("""SELECT P.Key,P.Number,P.Teams_Key FROM Pilots P JOIN Teams T ON P.Teams_Key=T.Key WHERE P.IsStrippedFromDB=0 AND P.Teams_Key IS NOT NULL AND T.Categories_Key=? ORDER BY P.Key""", (cat,)).fetchall()
+        rows = self.conn.execute(
+            """SELECT P.Key,P.Number,P.Teams_Key
+               FROM Pilots P JOIN Teams T ON P.Teams_Key=T.Key
+               WHERE P.IsStrippedFromDB=0 AND P.Teams_Key IS NOT NULL AND T.Categories_Key=?
+               ORDER BY P.Key""",
+            (cat,),
+        ).fetchall()
         self.riders, values = {}, []
         for key, number, team in rows:
-            label = f"#{number}  {key.split('-',1)[-1]}"
-            self.riders[label] = (key, team); values.append(label)
+            label = f"#{number}  {key.split('-', 1)[-1]}"
+            self.riders[label] = (key, team)
+            values.append(label)
         self.rider_box["values"] = values
         if values:
             preferred = next((v for v in values if "Herlings" in v), values[0])
-            self.rider_box.set(preferred); self.rider_changed()
+            self.rider_box.set(preferred)
+            self.rider_changed()
 
     def rider_changed(self):
         item = self.riders.get(self.rider_box.get())
-        if not item: return
+        if not item:
+            return
         _, old_team = item
         cat = self.class_box.get()
         rows = self.conn.execute("SELECT Key FROM Teams WHERE Categories_Key=? ORDER BY Ordering", (cat,)).fetchall()
         self.teams, names = {}, []
         for (team_key,) in rows:
-            short = team_key[len(cat)+1:] if team_key.startswith(cat + "-") else team_key
-            self.teams[short] = team_key; names.append(short)
+            short = team_key[len(cat) + 1:] if team_key.startswith(cat + "-") else team_key
+            self.teams[short] = team_key
+            names.append(short)
         self.team_box["values"] = names
         self.current_team.config(text=old_team)
-        old_short = old_team[len(cat)+1:] if old_team.startswith(cat + "-") else old_team
-        if old_short in self.teams: self.team_box.set(old_short)
+        old_short = old_team[len(cat) + 1:] if old_team.startswith(cat + "-") else old_team
+        if old_short in self.teams:
+            self.team_box.set(old_short)
 
     def create_backup(self):
-        if not self.db_path: raise RuntimeError("No DB loaded")
+        if not self.db_path:
+            raise RuntimeError("No DB loaded")
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         out = self.db_path + f".MXGP3TransferTool_{stamp}.bak"
         shutil.copy2(self.db_path, out)
@@ -360,111 +435,223 @@ class App(tk.Tk):
 
     def backup_manual(self):
         try:
-            out = self.create_backup(); self.log(f"DB backup: {out}"); messagebox.showinfo(APP_NAME, f"Backup created:\n\n{out}")
-        except Exception as e: messagebox.showerror(APP_NAME, str(e))
+            out = self.create_backup()
+            self.log(f"DB backup: {out}")
+            messagebox.showinfo(APP_NAME, f"Backup created:\n\n{out}")
+        except Exception as e:
+            messagebox.showerror(APP_NAME, str(e))
 
     def restore_backup(self):
-        if not self.db_path: return messagebox.showwarning(APP_NAME, "Load DB first.")
+        if not self.db_path:
+            return messagebox.showwarning(APP_NAME, "Load DB first.")
         bak = filedialog.askopenfilename(title="Select backup", filetypes=[("Backup", "*.bak"), ("All files", "*.*")])
-        if not bak: return
-        if not messagebox.askyesno(APP_NAME, "Restore this DB backup?"): return
+        if not bak:
+            return
+        if not messagebox.askyesno(APP_NAME, "Restore this DB backup?"):
+            return
         try:
-            if self.conn: self.conn.close()
+            if self.conn:
+                self.conn.close()
             shutil.copy2(bak, self.db_path)
             self.conn = sqlite3.connect(self.db_path)
-            self.load_riders(); self.log(f"Restored DB backup: {bak}")
-        except Exception as e: messagebox.showerror(APP_NAME, str(e))
+            self.load_riders()
+            self.log(f"Restored DB backup: {bak}")
+        except Exception as e:
+            messagebox.showerror(APP_NAME, str(e))
+
+    def game_is_running(self):
+        if os.name != "nt":
+            return False
+        try:
+            proc = subprocess.run(
+                ["tasklist"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                errors="ignore",
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            text = proc.stdout.lower()
+            return any(name in text for name in ["mxgp3.exe", "mxgp3-win64-shipping.exe"])
+        except Exception:
+            return False
 
     def transfer_and_apply(self):
-        if not self.conn: return messagebox.showwarning(APP_NAME, "Load DB.sqlite3 first.")
-        rider = self.riders.get(self.rider_box.get()); new_team = self.teams.get(self.team_box.get())
-        if not rider or not new_team: return
+        if not self.conn:
+            return messagebox.showwarning(APP_NAME, "Load DB.sqlite3 first.")
+        if self.game_is_running():
+            return messagebox.showwarning(APP_NAME, "Close MXGP3 before applying a transfer, then try again.")
+        rider = self.riders.get(self.rider_box.get())
+        new_team = self.teams.get(self.team_box.get())
+        if not rider or not new_team:
+            return
         rider_key, old_team = rider
-        if old_team == new_team: return messagebox.showinfo(APP_NAME, "Rider is already in that team.")
-        if not messagebox.askyesno(APP_NAME, f"Transfer and install into MXGP3?\n\n{rider_key}\n{old_team}\n→\n{new_team}"): return
+        if old_team == new_team:
+            return messagebox.showinfo(APP_NAME, "Rider is already in that team.")
+        if not messagebox.askyesno(
+            APP_NAME,
+            f"Transfer and automatically replace the game override?\n\n{rider_key}\n{old_team}\n→\n{new_team}",
+        ):
+            return
+
+        backup = None
         try:
             backup = self.create_backup()
-            self.conn.execute("UPDATE Pilots SET Teams_Key=? WHERE Key=?", (new_team, rider_key)); self.conn.commit()
+            self.conn.execute("UPDATE Pilots SET Teams_Key=? WHERE Key=?", (new_team, rider_key))
+            self.conn.commit()
             check = self.conn.execute("SELECT Teams_Key FROM Pilots WHERE Key=?", (rider_key,)).fetchone()
-            if not check or check[0] != new_team: raise RuntimeError("DB verification failed")
+            if not check or check[0] != new_team:
+                raise RuntimeError("DB verification failed")
+
             self.log(f"DB changed: {rider_key}: {old_team} -> {new_team}")
             self.log(f"Backup: {backup}")
             installed = self.build_and_install_pak()
             self.load_riders()
-            messagebox.showinfo(APP_NAME, f"Transfer applied.\n\nInstalled override PAK:\n{installed}\n\nClose/restart MXGP3 and test in Quick Race first.")
+            messagebox.showinfo(
+                APP_NAME,
+                f"Transfer applied automatically.\n\nInstalled/replaced:\n{installed}\n\nStart MXGP3 and test Quick Race.",
+            )
         except Exception as e:
-            try: self.conn.rollback()
-            except Exception: pass
+            if backup and Path(backup).exists() and self.db_path:
+                try:
+                    if self.conn:
+                        self.conn.close()
+                    shutil.copy2(backup, self.db_path)
+                    self.conn = sqlite3.connect(self.db_path)
+                    self.load_riders()
+                    self.log("Apply failed: DB rolled back automatically.")
+                except Exception as rollback_error:
+                    self.log(f"Rollback warning: {rollback_error}")
             messagebox.showerror(APP_NAME, str(e))
 
-    def apply_current_db(self):
-        try:
-            out = self.build_and_install_pak()
-            messagebox.showinfo(APP_NAME, f"Current DB installed into game:\n\n{out}\n\nRestart MXGP3 before testing.")
-        except Exception as e: messagebox.showerror(APP_NAME, str(e))
-
     def build_and_install_pak(self):
-        if not self.db_path or not Path(self.db_path).exists(): raise RuntimeError("Compatible DB.sqlite3 is not loaded.")
-        if not self.game_path: raise RuntimeError("MXGP3 installation was not detected.")
+        if not self.db_path or not Path(self.db_path).exists():
+            raise RuntimeError("Compatible DB.sqlite3 is not loaded.")
+        if not self.game_path:
+            raise RuntimeError("MXGP3 installation was not detected.")
         paks_dir = self.find_paks_dir()
-        if not paks_dir: raise RuntimeError("MXGP3 Content\\Paks folder not found.")
+        if not paks_dir:
+            raise RuntimeError("MXGP3 Content\\Paks folder not found.")
         if not self.unrealpak_path or not Path(self.unrealpak_path).exists():
-            raise RuntimeError("UnrealPak.exe not found. Click Browse UnrealPak once and select the UnrealPak.exe from your UnrealPakGUI/tools folder.")
+            raise RuntimeError("UnrealPak.exe not found. Select it once with Browse UnrealPak; after that it is remembered.")
 
+        internal_db = self.internal_db_path(paks_dir)
         final_pak = paks_dir / MOD_PAK_NAME
-        if final_pak.exists():
-            backup = final_pak.with_suffix(final_pak.suffix + ".previous")
-            shutil.copy2(final_pak, backup)
-            self.log(f"Previous transfer PAK backed up: {backup}")
+        backup_pak = paks_dir / (MOD_PAK_NAME + ".backup")
+        staged_install = paks_dir / (MOD_PAK_NAME + ".new")
 
-        with tempfile.TemporaryDirectory(prefix="MXGP3TransferTool_") as td:
-            td = Path(td)
-            staged = td / "DB.sqlite3"
-            shutil.copy2(self.db_path, staged)
+        with tempfile.TemporaryDirectory(prefix="MXGP3TransferTool_") as td_raw:
+            td = Path(td_raw)
+            staged_db = td / "DB.sqlite3"
+            shutil.copy2(self.db_path, staged_db)
             response = td / "paklist.txt"
-            response.write_text(f'"{staged}" "{INTERNAL_DB_PATH}"\n', encoding="utf-8")
+            response.write_text(f'"{staged_db}" "{internal_db}"\n', encoding="utf-8")
             output = td / MOD_PAK_NAME
-            cmd = [self.unrealpak_path, str(output), f"-Create={response}"]
-            self.log("Building override PAK...")
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="ignore", creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0))
+
+            self.log(f"Building high-priority override: {MOD_PAK_NAME}")
+            self.log(f"Internal DB path: {internal_db}")
+            proc = subprocess.run(
+                [self.unrealpak_path, str(output), f"-Create={response}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                errors="ignore",
+                creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0),
+            )
             if proc.returncode != 0 or not output.exists() or output.stat().st_size < 1024:
                 raise RuntimeError("UnrealPak failed.\n\n" + proc.stdout[-4000:])
 
-            verify = subprocess.run([self.unrealpak_path, str(output), "-List"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="ignore", creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0))
+            verify = subprocess.run(
+                [self.unrealpak_path, str(output), "-List"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                errors="ignore",
+                creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0),
+            )
             listing = verify.stdout.lower().replace("\\", "/")
-            if "db.sqlite3" not in listing or "content/assets/data/db/nocook" not in listing:
-                raise RuntimeError("PAK was created, but its internal DB path is wrong. Nothing was installed.")
+            expected_tail = "/content/assets/data/db/nocook/db.sqlite3"
+            if "db.sqlite3" not in listing or expected_tail not in listing:
+                raise RuntimeError("PAK was built, but the internal DB path failed verification. Nothing was replaced.")
 
-            shutil.copy2(output, final_pak)
+            if staged_install.exists():
+                staged_install.unlink()
+            shutil.copy2(output, staged_install)
 
-        # Some UE4 games ship a .sig next to the original PAK. If MXGP3 has one, mirror it for the override filename.
-        sig_candidates = [paks_dir / "pakchunk0-WindowsNoEditor.sig", paks_dir / "MXGP3-WindowsNoEditor.sig"]
-        original_sig = next((p for p in sig_candidates if p.exists()), None)
-        if original_sig:
-            mod_sig = final_pak.with_suffix(".sig")
+        # Clean obsolete tool PAK names so only the newest override can win.
+        for old_name in OLD_MOD_PAK_NAMES:
+            old = paks_dir / old_name
+            if old.name == MOD_PAK_NAME:
+                continue
+            if old.exists():
+                old_backup = old.with_suffix(old.suffix + ".obsolete")
+                try:
+                    if old_backup.exists():
+                        old_backup.unlink()
+                    os.replace(old, old_backup)
+                    self.log(f"Disabled obsolete tool PAK: {old_backup.name}")
+                except Exception as e:
+                    self.log(f"Could not disable old PAK {old.name}: {e}")
+
+        # Back up the previously installed tool PAK, then atomically replace it.
+        if final_pak.exists():
+            if backup_pak.exists():
+                backup_pak.unlink()
+            shutil.copy2(final_pak, backup_pak)
+            self.log(f"Previous override backed up: {backup_pak.name}")
+
+        try:
+            os.replace(staged_install, final_pak)
+        except PermissionError:
+            raise RuntimeError("Windows blocked the PAK replacement. Make sure MXGP3 is fully closed and run the tool as administrator if needed.")
+
+        # Remove an old fake/copied signature from earlier builds; a copied signature is not valid for a modified PAK.
+        stale_sig = final_pak.with_suffix(".sig")
+        if stale_sig.exists():
             try:
-                shutil.copy2(original_sig, mod_sig)
-                self.log(f"SIG copied: {mod_sig}")
-            except Exception as e:
-                self.log(f"SIG copy warning: {e}")
+                stale_sig.unlink()
+                self.log("Removed stale tool .sig from an older build.")
+            except Exception:
+                pass
 
-        self.log(f"Installed: {final_pak}")
-        self.log(f"Internal override: {INTERNAL_DB_PATH}")
+        if not final_pak.exists() or final_pak.stat().st_size < 1024:
+            raise RuntimeError("Automatic replacement failed: final PAK is missing or invalid.")
+
+        final_verify = subprocess.run(
+            [self.unrealpak_path, str(final_pak), "-List"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors="ignore",
+            creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0),
+        )
+        final_listing = final_verify.stdout.lower().replace("\\", "/")
+        if "db.sqlite3" not in final_listing or "/content/assets/data/db/nocook/db.sqlite3" not in final_listing:
+            if backup_pak.exists():
+                os.replace(backup_pak, final_pak)
+            raise RuntimeError("Installed PAK failed final verification. Previous tool PAK was restored.")
+
+        self.log(f"AUTO REPLACE OK: {final_pak}")
+        self.log("The previous Transfer Tool override was replaced automatically.")
         return final_pak
 
     def remove_mod_pak(self):
         paks_dir = self.find_paks_dir()
-        if not paks_dir: return messagebox.showwarning(APP_NAME, "Game Paks folder not detected.")
-        target = paks_dir / MOD_PAK_NAME
-        sig = target.with_suffix(".sig")
+        if not paks_dir:
+            return messagebox.showwarning(APP_NAME, "Game Paks folder not detected.")
         removed = []
-        for p in (target, sig):
+        candidates = [paks_dir / n for n in OLD_MOD_PAK_NAMES]
+        candidates += [paks_dir / (MOD_PAK_NAME + ".new"), paks_dir / (MOD_PAK_NAME + ".backup")]
+        for p in candidates:
             if p.exists():
-                try: p.unlink(); removed.append(str(p))
-                except Exception as e: return messagebox.showerror(APP_NAME, str(e))
+                try:
+                    p.unlink()
+                    removed.append(str(p))
+                except Exception as e:
+                    return messagebox.showerror(APP_NAME, str(e))
         if removed:
-            self.log("Removed transfer override PAK.")
-            messagebox.showinfo(APP_NAME, "Transfer PAK removed. Restart MXGP3.")
+            self.log("Removed Transfer Tool PAK files.")
+            messagebox.showinfo(APP_NAME, "Transfer Tool PAK removed. Restart MXGP3.")
         else:
             messagebox.showinfo(APP_NAME, "No Transfer Tool PAK is installed.")
 
