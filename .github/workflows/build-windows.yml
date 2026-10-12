@@ -37,23 +37,23 @@ jobs:
           .\repak.exe --version
 
       - name: Syntax check
-        run: python -m py_compile mxgp3_transfer_tool.py
+        run: python -m py_compile mxgp3_transfer_tool_v05.py
 
       - name: Build self-contained EXE
         shell: pwsh
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed `
-            --name MXGP3_Transfer_Tool_v0.4 `
+            --name MXGP3_Transfer_Tool_v0.5 `
             --add-binary "repak.exe;." `
             --add-data "repak-LICENSE-MIT.txt;licenses" `
             --add-data "repak-LICENSE-APACHE.txt;licenses" `
-            mxgp3_transfer_tool.py
+            mxgp3_transfer_tool_v05.py
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MXGP3_Transfer_Tool_v0.4
-          path: dist/MXGP3_Transfer_Tool_v0.4.exe
+          name: MXGP3_Transfer_Tool_v0.5
+          path: dist/MXGP3_Transfer_Tool_v0.5.exe
           if-no-files-found: error
 
       - name: Publish direct EXE download
@@ -61,11 +61,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v0.4-self-contained"
-          $exe = "dist/MXGP3_Transfer_Tool_v0.4.exe"
+          $tag = "v0.5-full-transfer"
+          $exe = "dist/MXGP3_Transfer_Tool_v0.5.exe"
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $exe --clobber
           } else {
-            gh release create $tag $exe --title "MXGP3 Transfer Tool v0.4 Self-Contained" --notes "Fixes the UnrealPak DerivedDataCache crash by replacing UnrealPak with bundled repak. The tool detects MXGP3, reads the original PAK version and mount point, finds and extracts DB.sqlite3 directly from the game, applies rider transfers, builds a matching override PAK, verifies it and atomically installs it. No separate UnrealPak.exe or pre-extracted DB is required." --target "${{ github.sha }}"
+            gh release create $tag $exe --title "MXGP3 Transfer Tool v0.5 Full Transfer" --notes "Test build with a fuller MXGP3 transfer mechanism: updates Pilots.Teams_Key, syncs rider bike manufacturer from the destination team, rebuilds official visual filters for team suit/livery and bike parts, creates a canonical high-priority pakchunk0-WindowsNoEditor_999_P.pak patch, and reads the installed patch DB back to verify the requested transfer is physically inside the PAK." --target "${{ github.sha }}"
           }
